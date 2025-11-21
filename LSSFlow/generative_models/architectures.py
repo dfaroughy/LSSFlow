@@ -21,6 +21,26 @@ class MLP(nn.Module):
         return self.ff(x)
 
 
+class ResNet(nn.Module):
+    def __init__(self, dim_input, dim_embd, dim_out, n_blocks=3, dropout=0.1):
+        super().__init__()
+
+        self.input_proj = nn.Linear(dim_input, dim_embd)
+
+        self.blocks = nn.Sequential(
+            *[ResidualBlock(dim_embd, dropout=dropout) for _ in range(n_blocks)]
+        )
+
+        self.output_proj = nn.Linear(dim_embd, dim_out)
+
+    def forward(self, x):
+        x = self.input_proj(x)
+        x = F.gelu(x)
+        x = self.blocks(x)
+        x = self.output_proj(x)
+        return x
+
+
 class ResidualBlock(nn.Module):
     def __init__(self, dim, dropout=0.1):
         super().__init__()
@@ -41,27 +61,6 @@ class ResidualBlock(nn.Module):
         out = out + residual
         out = F.gelu(out)
         return out
-
-
-class ResNet(nn.Module):
-    def __init__(self, dim_input, dim_embd, dim_out, n_blocks=3, dropout=0.1):
-        super().__init__()
-
-        self.input_proj = nn.Linear(dim_input, dim_embd)
-
-        self.blocks = nn.Sequential(
-            *[ResidualBlock(dim_embd, dropout=dropout) for _ in range(n_blocks)]
-        )
-
-        self.output_proj = nn.Linear(dim_embd, dim_out)
-
-    def forward(self, x):
-        x = self.input_proj(x)
-        x = F.gelu(x)
-        x = self.blocks(x)
-        x = self.output_proj(x)
-        return x
-
 
 
 class LearnableFourierEmbedding(nn.Module):
