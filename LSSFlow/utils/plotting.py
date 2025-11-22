@@ -3,27 +3,26 @@ import matplotlib as mpl
 import numpy as np
 import torch
 
+from matplotlib import rcParams
+rcParams.update({'figure.autolayout': True})
+mpl.rc('axes',edgecolor='k')
+plt.rcParams['savefig.dpi'] = 75
+plt.rcParams['figure.autolayout'] = False
+plt.rcParams['figure.figsize'] = 10, 6
+plt.rcParams['axes.labelsize'] = 12
+plt.rcParams['axes.titlesize'] = 15
+plt.rcParams['font.size'] = 12
+plt.rcParams['lines.linewidth'] = 2.0
+plt.rcParams['lines.markersize'] = 8
+plt.rcParams['legend.fontsize'] = 14
+plt.rcParams['xtick.color'] = 'k'
+plt.rcParams['ytick.color'] = 'k'
+plt.rcParams['text.usetex'] = False
 
 def plot_lss_results(truth, target, figsize=(12, 6),  dpi=120, marker_size=0.01, colors=['b','r'], marker='o', alpha=1.0):
 
     truth = truth.cpu().numpy()
     target = target.cpu().numpy()
-
-    from matplotlib import rcParams
-    rcParams.update({'figure.autolayout': True})
-    mpl.rc('axes',edgecolor='k')
-    plt.rcParams['savefig.dpi'] = 75
-    plt.rcParams['figure.autolayout'] = False
-    plt.rcParams['figure.figsize'] = 10, 6
-    plt.rcParams['axes.labelsize'] = 12
-    plt.rcParams['axes.titlesize'] = 15
-    plt.rcParams['font.size'] = 12
-    plt.rcParams['lines.linewidth'] = 2.0
-    plt.rcParams['lines.markersize'] = 8
-    plt.rcParams['legend.fontsize'] = 14
-    plt.rcParams['xtick.color'] = 'k'
-    plt.rcParams['ytick.color'] = 'k'
-    plt.rcParams['text.usetex'] = True
 
     fig = plt.figure(figsize=figsize, dpi=120)
 
@@ -33,30 +32,11 @@ def plot_lss_results(truth, target, figsize=(12, 6),  dpi=120, marker_size=0.01,
     ax2 = fig.add_subplot(122,projection='3d')
     ax2.scatter3D(target[:,0], target[:,1], target[:,2], s=marker_size, c=colors[1], marker=marker, alpha=alpha)
 
-    return fig, [ax1, ax2]
-
 
 def plot_lss_slices(truth, target, figsize=(12, 12), dpi=120, marker_size=0.01, colors=['b','r'], marker='o', alpha=1.0):
 
     truth = truth.cpu().numpy()
     target = target.cpu().numpy()
-
-    from matplotlib import rcParams
-    rcParams.update({'figure.autolayout': True})
-    mpl.rc('axes',edgecolor='k')
-    plt.rcParams['savefig.dpi'] = 75
-    plt.rcParams['figure.autolayout'] = False
-    plt.rcParams['figure.figsize'] = 10, 6
-    plt.rcParams['axes.labelsize'] = 12
-    plt.rcParams['axes.titlesize'] = 15
-    plt.rcParams['font.size'] = 12
-    plt.rcParams['lines.linewidth'] = 2.0
-    plt.rcParams['lines.markersize'] = 8
-    plt.rcParams['legend.fontsize'] = 14
-    plt.rcParams['xtick.color'] = 'k'
-    plt.rcParams['ytick.color'] = 'k'
-    plt.rcParams['text.usetex'] = True
-
     fig = plt.figure(figsize=figsize, dpi=dpi)
 
     #------------------------------------------------------------------
@@ -94,24 +74,6 @@ def plot_lss_slices(truth, target, figsize=(12, 12), dpi=120, marker_size=0.01, 
 
 
 def plot_power_spectrum_sphere(k, Pk_truth, Pk_target, figsize=(8,6)):
-
-    from matplotlib import rcParams
-    rcParams.update({'figure.autolayout': True})
-    mpl.rc('axes',edgecolor='k')
-    plt.rcParams['savefig.dpi'] = 75
-    plt.rcParams['figure.autolayout'] = False
-    plt.rcParams['figure.figsize'] = 10, 6
-    plt.rcParams['axes.labelsize'] = 12
-    plt.rcParams['axes.titlesize'] = 15
-    plt.rcParams['font.size'] = 12
-    plt.rcParams['lines.linewidth'] = 2.0
-    plt.rcParams['lines.markersize'] = 8
-    plt.rcParams['legend.fontsize'] = 14
-    plt.rcParams['xtick.color'] = 'k'
-    plt.rcParams['ytick.color'] = 'k'
-    plt.rcParams['text.usetex'] = True
-
-    import matplotlib.pyplot as plt
 
     if isinstance(k, torch.Tensor):
         k = k.cpu().numpy()

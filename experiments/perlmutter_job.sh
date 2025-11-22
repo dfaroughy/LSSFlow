@@ -13,4 +13,4 @@ export WORLD_SIZE=$SLURM_NTASKS
 export MASTER_ADDR=$(hostname)
 export MASTER_PORT=$(expr 10000 + $(echo -n $SLURM_JOBID | tail -c 4))
 
-srun python train.py
+srun python $1

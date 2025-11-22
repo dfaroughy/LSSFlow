@@ -5,6 +5,7 @@ from torch.nn import functional as F
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from dataclasses import dataclass
 
+from data.datasets import Uniform3D
 from generative_models.architectures import ResNet, LearnableFourierEmbedding
 from generative_models.dynamics import UniformFlow, FreeFallFlow
 
@@ -65,6 +66,8 @@ class ConditionalFlowMatching(L.LightningModule):
 
         if config.use_mass_reg:
             self.mass_reg = nn.Parameter(torch.tensor(config.mass_reg))
+
+        self.source = Uniform3D(support='cube')  # source distribution
 
     # ...Lightning methods 
 
@@ -145,8 +148,10 @@ class ConditionalFlowMatching(L.LightningModule):
     # ...Model functions
 
     def loss(self, batch):
-        x0, x1 = batch.source, batch.target
-        t = torch.rand(len(x0), device=self.device)
+
+        x1 = batch.target
+        x0 = self.source.sample(num_points=len(x1), device=self.device)
+        t = torch.rand(len(x1), device=self.device)
         xt = self.conditional_dynamics.sample(x0, x1, t)  
 
         with torch.set_grad_enabled(True):

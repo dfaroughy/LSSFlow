@@ -2,7 +2,7 @@ import pytorch_lightning as L
 from dataclasses import dataclass
 
 from generative_models.cfm import ConditionalFlowMatching
-from data.datasets import SphericalUniform, UchuuCentered
+from data.datasets import Uniform3D, UchuuVoxelizedData
 from utils.experiments import build_dataloaders, set_comet_logger
 
 
@@ -15,10 +15,12 @@ class Config:
     project_name = 'LargeScaleStructure'
     workspace = 'dfaroughy'
     save_dir = '/pscratch/sd/d/dfarough/LargeScaleStructure/results'
-    datafile = '/pscratch/sd/d/dfarough/LargeScaleStructure/data/Uchuu1000-Pl18_z0p00_hlist_4.h5'
-    radius = 36
-    batch_size = 1024
-    max_epochs = 50000
+    datafile = '/pscratch/sd/d/dfarough/LSS_data/Uchuu1000-Pl18_z0p00_hlist_4.h5'
+    box_size = 128      # choose 'Universe' box size in Mpc/h
+    voxel_size = 64     # choose voxelization size in Mpc/h
+    voxel_idx = 0       # choose which voxel index to train on
+    batch_size = 2048
+    max_epochs = 20000
     train_split = 1.0
     lr = 0.001
     lr_final = 0.0001
@@ -29,20 +31,19 @@ class Config:
     n_embd = 256
     num_blocks = 8
     dropout = 0.1
-    sigma = 1e-5 # cfm hyperparameter
-    gamma = 1.0  # fourier feature hyperparameter
+    sigma = 1e-5            # cfm hyperparameter
+    gamma = 1.0             # fourier feature hyperparameter
     mass_reg = 1.0
     use_mass_reg = True
     use_OT = True
-    tag = 'cfm_uchuu'
+    tag = 'cfm_uchuu_uniform'
 #==================
 
 config = Config()
-source = SphericalUniform(radius=1)
-lss = UchuuCentered(datafile=config.datafile, radius=config.radius)
+lss = UchuuVoxelizedData(datafile=config.datafile, box_size=config.box_size, voxel_size=config.voxel_size)
+target = lss.sample(voxel_idx=config.voxel_idx, normalize=True)
 
-train_dataloader, _ = build_dataloaders(source=source, 
-                                        target=lss, 
+train_dataloader, _ = build_dataloaders(target=target, 
                                         batch_size=config.batch_size, 
                                         train_split=config.train_split)
 

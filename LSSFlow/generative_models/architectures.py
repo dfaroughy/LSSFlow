@@ -9,14 +9,12 @@ from typing import Optional, List, Union
 class MLP(nn.Module):
     def __init__(self, dim_input, dim_embd, dim_out):
         super().__init__()
-
         self.ff = nn.Sequential(nn.Linear(dim_input, dim_embd),
                                 nn.GELU(),
                                 nn.Linear(dim_embd, dim_embd // 2),
                                 nn.GELU(),
                                 nn.Linear(dim_embd // 2, dim_out)
                                 )
-
     def forward(self, x):
         return self.ff(x)
 

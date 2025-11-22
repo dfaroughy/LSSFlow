@@ -10,17 +10,9 @@ from torch.utils.data import DataLoader, random_split
 
 from data.datasets import DataCoupling
 
-def build_dataloaders(source, target, batch_size, train_split=1.0):
+def build_dataloaders(source=None, target=None, batch_size=1024, train_split=1.0):
 
-    target_data = target.sample()
-
-    if isinstance(source, Path):
-        source_data = torch.load(source)
-        target_data = target_data[:len(source_data)]
-    else:
-        source_data = source.sample(num_points=len(target_data))
-
-    dataset = DataCoupling(source_data, target_data)
+    dataset = DataCoupling(target=target, source=source)
     train_size = int(train_split * len(dataset))
     val_size = len(dataset) - train_size
     train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
