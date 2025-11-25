@@ -21,7 +21,7 @@ plt.rcParams['ytick.color'] = 'k'
 plt.rcParams['text.usetex'] = False
 
 
-def plot_lss_results(truth, target, figsize=(12, 6),  dpi=120, marker_size=0.01, colors=['k','r'],, marker=',', alpha=1.0, save_fig=None, orientation=(30, -60), color_by_density=False, cmap='magma'):
+def plot_lss_results(truth, target, figsize=(12, 6),  dpi=120, marker_size=0.01, colors=['k','r'], marker=',', alpha=1.0, save_fig=None, orientation=(30, -60), color_by_density=False, cmap='magma'):
 
     truth = truth.cpu().numpy()
     target = target.cpu().numpy()
