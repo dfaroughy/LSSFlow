@@ -1,101 +1,171 @@
 import yaml
 import os
-import numpy as np
 import torch
+import pytorch_lightning as L
 from pathlib import Path
 from pytorch_lightning.loggers import CometLogger
 from pytorch_lightning.utilities import rank_zero_only
-from pytorch_lightning.callbacks import Callback
 from torch.utils.data import DataLoader, random_split
+from dataclasses import dataclass
 
+from utils import BASE_DIR, COMET_API_KEY, WORKSPACE, PROJECT
 from data.datasets import DataCoupling
-
-def build_dataloaders(source=None, target=None, batch_size=1024, train_split=1.0):
-
-    dataset = DataCoupling(target=target, source=source)
-    train_size = int(train_split * len(dataset))
-    val_size = len(dataset) - train_size
-    train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
-    train = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-
-    if val_size == 0:
-        return train, None
-
-    val = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
-    return train, val
+from generative_models.flow_matching import ConditionalFlowMatching
+from generative_models.action_matching import ActionMatching
 
 
-@rank_zero_only
-def set_comet_logger(config):
-    logger = CometLogger(api_key=config.api_key,
-                         project_name=config.project_name,
-                         workspace=config.workspace,
-                         save_dir=config.save_dir
-                        )
-    if not hasattr(config, "experiment_id"): # if new experiment
+@dataclass
+class Configs:
+    """General configuration class that can load
+       from existing experiment directory given exp_key.
+    """
+    base_dir = BASE_DIR
+    api_key = COMET_API_KEY
+    workspace = WORKSPACE
+    project_name = PROJECT
+    experiment_id: str = None
+    
+    def __init__(self, load_config: Path=None, **kwargs):
 
-        config_dict = {k: v for k, v in vars(config.__class__).items() if not k.startswith("__")}
-        logger.experiment.log_parameters(config_dict)
-        logger.experiment.add_tags(config.tag)
+        if load_config is not None:
+            loaded_config = yaml.safe_load(open(load_config))
+            for key, value in loaded_config.items():
+                setattr(self, key, value)
 
-        if logger.experiment.get_key() is not None:
-
-            config.experiment_id = logger.experiment.get_key()
-            path = f"{config.save_dir}/{config.experiment_id}"
-            os.makedirs(path, exist_ok=True)
-
-            with open(os.path.join(path, "config.yaml"), "w") as f:
-                yaml.safe_dump(config_dict, f, sort_keys=False, default_flow_style=False)
-
-    return logger
+        for key, value in kwargs.items():
+            setattr(self, key, value)
 
 
-class FlowGeneratorCallback(Callback):
-    def __init__(self, config):
-        super().__init__()
+class RunExperiment:
+    def __init__(self, 
+                 config: Configs, 
+                 target=None,
+                 source=None
+                 ):
+
         self.config = config
-        self.experiment_dir = Path(f'{config.save_dir}/{config.experiment_id}')
-        self.tag = f"_{config.tag}" if config.tag else ""
+        self.target = target
+        self.source = source
 
-    def on_predict_start(self, trainer, pl_module):
-        self.batched_data = []
+        if config.gen_model == 'ConditionalFlowMatching':
+            self.gen_model = ConditionalFlowMatching
 
-    def on_predict_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx=0):
-        self.batched_data.append(outputs)
+        elif config.gen_model == 'ActionMatching':
+            self.gen_model = ActionMatching
 
-    def on_predict_end(self, trainer, pl_module):
-        rank = trainer.global_rank
-        self._save_results_local(rank)
-        trainer.strategy.barrier()  # wait for all ranks to finish
+    def train(self):
+        model = self.gen_model(config=self.config)
+        dataloader, _ = self.build_dataloaders()
+        logger = self.set_comet_logger()
 
-        if trainer.is_global_zero:
-            self._gather_results_global(trainer)
-            self._clean_temp_files()
+        callback = L.callbacks.ModelCheckpoint(dirpath=None,
+                                                monitor="train_loss",
+                                                filename="best",
+                                                save_top_k=1,
+                                                mode="min",
+                                                save_last=True
+                                                )
+        trainer = L.Trainer(max_epochs=self.config.max_epochs, 
+                            accelerator='gpu', 
+                            devices='auto',
+                            num_nodes=self.config.num_nodes,
+                            strategy='ddp',
+                            callbacks=[callback],
+                            logger=logger,
+                            sync_batchnorm=True,
+                            gradient_clip_val=1.0,
+                            )
+        trainer.fit(model, dataloader)
 
-    def _save_results_local(self, rank):
-        randint = np.random.randint(0, 1000000)
-        data = torch.cat(self.batched_data, dim=0)
-        data.save_to(f"{self.experiment_dir}/temp_data{self.tag}_{rank}_{randint}.h5")
+    def resume(self, experiment_id: str):
+        ckpt_path = Path(BASE_DIR, PROJECT, experiment_id, 'checkpoints', 'last.ckpt')
+        model = self.gen_model.load_from_checkpoint(ckpt_path,
+                                                    config=self.config,
+                                                    map_location="cpu"
+                                                    )
+
+        dataloader, _ = self.build_dataloaders()
+        logger = self.set_comet_logger()
+
+        callback = L.callbacks.ModelCheckpoint(dirpath=None,
+                                            monitor="train_loss",
+                                            filename="best",
+                                            save_top_k=1,
+                                            mode="min",
+                                            save_last=True
+                                            )
+        trainer = L.Trainer(max_epochs=self.config.max_epochs, 
+                            accelerator='gpu', 
+                            devices='auto',
+                            num_nodes=self.config.num_nodes,
+                            strategy='ddp',
+                            callbacks=[callback],
+                            logger=logger,
+                            sync_batchnorm=True,
+                            gradient_clip_val=1.0,
+                            )
+        trainer.fit(model, dataloader, ckpt_path=ckpt_path)
+
+    def generate(self, experiment_id: str):
+        path = Path(BASE_DIR, PROJECT, experiment_id)
+        model = self.gen_model.load_from_checkpoint(path / f'checkpoints/{self.config.ckpt}.ckpt',
+                                                    config=self.config,
+                                                    map_location="cpu"
+                                                    )
+
+        dataloader, _ = self.build_dataloaders()
+        generator = L.Trainer(accelerator='gpu', 
+                              devices=[0], 
+                              num_nodes=1,
+                              inference_mode=False)
+
+        sample_batched = generator.predict(model, dataloader)
+        trajectories = torch.cat(sample_batched, dim=0)  
+        gen_sample = trajectories.permute(1,0,2)[-1]  
+        torch.save(gen_sample, path / 'gen_sample.pt')
+
+    def build_dataloaders(self):
+        dataset = DataCoupling(target=self.target, source=self.source)
+        train_size = int(self.config.train_split * len(dataset))
+        val_size = len(dataset) - train_size
+        train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
+        train = DataLoader(train_dataset, batch_size=self.config.batch_size, shuffle=True)
+        if val_size == 0:
+            return train, None
+        val = DataLoader(val_dataset, batch_size=self.config.batch_size, shuffle=False)
+        return train, val
 
     @rank_zero_only
-    def _gather_results_global(self, trainer):
-    
-        os.mkdir(f'{self.experiment_dir}/generation_results{self.tag}')
+    def set_comet_logger(self):
 
-        with open(f'{self.experiment_dir}/generation_results{self.tag}/configs.yaml' , 'w' ) as outfile:
-            yaml.dump( self.config.__dict__, outfile, sort_keys=False)
+        logger = CometLogger(api_key=COMET_API_KEY,
+                             project_name=PROJECT,
+                             workspace=WORKSPACE,
+                             save_dir=BASE_DIR,
+                             experiment_key=self.config.experiment_id
+                             )
 
-        temp_files = self.experiment_dir.glob(f"temp_data{self.tag}_*.h5")
-        sample = torch.cat([torch.load(str(f)) for f in temp_files], dim=0)
+        # create new experiment
+        if self.config.experiment_id is None:
 
-        if sample.has_continuous: # post-process continuous features
-            mu = torch.tensor(self.config.metadata['mean'])
-            sig = torch.tensor(self.config.metadata['std'])
-            sample.continuous = (sample.continuous * sig) + mu
+            tags = self.config.tags + [self.config.data_name, 
+                                       self.config.gen_model, 
+                                       self.config.network]
 
-        sample.apply_mask()  # ensure mask is applied to pads
-        sample.save_to(f'{self.experiment_dir}/generation_results{self.tag}/generated_sample.h5')
+            if hasattr(self.config, 'flow'):
+                tags += [self.config.flow]
 
-    def _clean_temp_files(self):
-        for f in self.experiment_dir.glob(f"temp_data{self.tag}_*.h5"):
-            f.unlink()
+            logger.experiment.log_parameters(vars(self.config))
+            logger.experiment.add_tags(tags)
+            self.config.experiment_id = logger.experiment.get_key()
+            path = Path(BASE_DIR, PROJECT, self.config.experiment_id)
+            os.makedirs(path, exist_ok=True)
+            
+            # save config file
+            with open(path / "config.yaml", "w") as f:
+                yaml.safe_dump(vars(self.config), f, sort_keys=False, default_flow_style=False)
+
+        return logger
+
+
+
