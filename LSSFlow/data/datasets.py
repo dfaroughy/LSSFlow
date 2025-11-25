@@ -79,7 +79,7 @@ class UchuuVoxelizedData:
         x = voxel_idx % self.num_side
         return (x, y, z)
 
-    def get_voxel_center(self, voxel_idx=0):
+    def voxel_coord(self, voxel_idx=0):
         x_idx, y_idx, z_idx = self.get_3D_coord(voxel_idx)
         center_x = (x_idx + 0.5) * self.voxel_size
         center_y = (y_idx + 0.5) * self.voxel_size
@@ -87,7 +87,7 @@ class UchuuVoxelizedData:
         return (center_x, center_y, center_z)
 
     def normalize_data(self, points, voxel_idx=0):
-        center_x, center_y, center_z = self.get_voxel_center(voxel_idx)
+        center_x, center_y, center_z = self.voxel_coord(voxel_idx)
         shift = torch.tensor([center_x, center_y, center_z], dtype=points.dtype, device=points.device)
         scale = self.voxel_size / 2.0
         self.normalization_params = {'shift': shift, 'scale': scale}
@@ -132,6 +132,9 @@ class UchuuVoxelizedData:
         points_sorted = points[order]
 
         return points_sorted
+
+    def counts(self, voxel_idx=0):
+        return self.offsets[voxel_idx + 1] - self.offsets[voxel_idx]
 
     def display(self, voxel_idx, normalize=False, figsize=(12, 6),  dpi=120, **kwargs):
         data = self.sample(voxel_idx, normalize).cpu().numpy()

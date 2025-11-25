@@ -5,14 +5,28 @@ from torch.nn import functional as F
 
 from typing import Optional, List, Union
 
+NN_ACTIVATION_MAP = {
+    "ReLU": nn.ReLU,
+    "LeakyReLU": nn.LeakyReLU,
+    "GELU": nn.GELU,
+    "SiLU": nn.SiLU,
+}
+
+F_ACTIVATION_MAP = {
+    "ReLU": F.relu,
+    "LeakyReLU": F.leaky_relu,
+    "GELU": F.gelu,
+    "SiLU": F.silu,
+}
 
 class MLP(nn.Module):
-    def __init__(self, dim_input, dim_embd, dim_out):
+    def __init__(self, dim_input, dim_embd, dim_out, activation):
         super().__init__()
+        self.activation = NN_ACTIVATION_MAP[activation]
         self.ff = nn.Sequential(nn.Linear(dim_input, dim_embd),
-                                nn.GELU(),
+                                self.activation(),
                                 nn.Linear(dim_embd, dim_embd // 2),
-                                nn.GELU(),
+                                self.activation(),
                                 nn.Linear(dim_embd // 2, dim_out)
                                 )
     def forward(self, x):
@@ -20,44 +34,52 @@ class MLP(nn.Module):
 
 
 class ResNet(nn.Module):
-    def __init__(self, dim_input, dim_embd, dim_out, n_blocks=3, dropout=0.1):
-        super().__init__()
+    def __init__(self, 
+                 dim_input, 
+                 dim_embd, 
+                 dim_out, 
+                 n_blocks=3, 
+                 dropout=0.1, 
+                 activation="GELU"):
 
+        super().__init__()
+        self.activation = F_ACTIVATION_MAP[activation]
         self.input_proj = nn.Linear(dim_input, dim_embd)
 
         self.blocks = nn.Sequential(
-            *[ResidualBlock(dim_embd, dropout=dropout) for _ in range(n_blocks)]
+            *[ResidualBlock(dim_embd, dropout, self.activation) for _ in range(n_blocks)]
         )
 
         self.output_proj = nn.Linear(dim_embd, dim_out)
 
     def forward(self, x):
         x = self.input_proj(x)
-        x = F.gelu(x)
+        x = self.activation(x)
         x = self.blocks(x)
         x = self.output_proj(x)
         return x
 
 
 class ResidualBlock(nn.Module):
-    def __init__(self, dim, dropout=0.1):
+    def __init__(self, dim, dropout=0.1, activation=F.gelu):
         super().__init__()
         self.lin1 = nn.Linear(dim, dim)
         self.norm1 = nn.LayerNorm(dim)
         self.lin2 = nn.Linear(dim, dim)
         self.norm2 = nn.LayerNorm(dim)
         self.dropout = nn.Dropout(dropout)
+        self.activation = activation
 
     def forward(self, x):
         residual = x
         out = self.lin1(x)
         out = self.norm1(out)
-        out = F.gelu(out)
+        out = self.activation(out)
         out = self.dropout(out)
         out = self.lin2(out)
         out = self.norm2(out)
         out = out + residual
-        out = F.gelu(out)
+        out = self.activation(out)
         return out
 
 

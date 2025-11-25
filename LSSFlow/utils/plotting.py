@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 import numpy as np
 import torch
+from scipy.ndimage import gaussian_filter, map_coordinates
 
 from matplotlib import rcParams
 rcParams.update({'figure.autolayout': True})
@@ -19,58 +20,96 @@ plt.rcParams['xtick.color'] = 'k'
 plt.rcParams['ytick.color'] = 'k'
 plt.rcParams['text.usetex'] = False
 
-def plot_lss_results(truth, target, figsize=(12, 6),  dpi=120, marker_size=0.01, colors=['b','r'], marker='o', alpha=1.0):
+
+def plot_lss_results(truth, target, figsize=(12, 6),  dpi=120, marker_size=0.01, colors=['k','r'],, marker=',', alpha=1.0, save_fig=None, orientation=(30, -60), color_by_density=False, cmap='magma'):
 
     truth = truth.cpu().numpy()
     target = target.cpu().numpy()
+    data_list = [truth, target]
+    elev, azim = orientation
 
-    fig = plt.figure(figsize=figsize, dpi=120)
-
-    ax1 = fig.add_subplot(121,projection='3d')
-    ax1.scatter3D(truth[:,0], truth[:,1], truth[:,2], s=marker_size, c=colors[0], marker=marker, alpha=alpha)
-    
-    ax2 = fig.add_subplot(122,projection='3d')
-    ax2.scatter3D(target[:,0], target[:,1], target[:,2], s=marker_size, c=colors[1], marker=marker, alpha=alpha)
-
-
-def plot_lss_slices(truth, target, figsize=(12, 12), dpi=120, marker_size=0.01, colors=['b','r'], marker='o', alpha=1.0):
-
-    truth = truth.cpu().numpy()
-    target = target.cpu().numpy()
     fig = plt.figure(figsize=figsize, dpi=dpi)
 
-    #------------------------------------------------------------------
-    xi, xj, xk = 0, 1, 2
-    zmask = np.abs(truth[:,xk])<0.07
-    trajectories_zmask = np.abs(target[:,xk])<0.07
-    ax = fig.add_subplot(321)
-    ax.scatter(truth[zmask,xi],truth[zmask,xj],s=marker_size, c=colors[0], marker=marker, alpha=alpha)
-    ax.set_aspect('equal')
-    ax = fig.add_subplot(322)
-    ax.scatter(target[trajectories_zmask,xi],target[trajectories_zmask,xj], s=marker_size, c=colors[1], marker=marker, alpha=alpha)
-    ax.set_aspect('equal')
+    for i, data in enumerate(data_list):
+        ax = fig.add_subplot(1, 2, i+1, projection='3d')
+        ax.view_init(elev=elev, azim=azim)
+        ax.grid(False)
+        
+        c = colors[i]
+        ax.scatter3D(data[:,0], data[:,1], data[:,2], s=marker_size, c=c, marker=marker, alpha=alpha)
+        
+        # Draw full cube
+        xlim = ax.get_xlim()
+        ylim = ax.get_ylim()
+        zlim = ax.get_zlim()
+        
+        # Construct corners
+        corners = np.array([
+            [xlim[0], ylim[0], zlim[0]],
+            [xlim[1], ylim[0], zlim[0]],
+            [xlim[1], ylim[1], zlim[0]],
+            [xlim[0], ylim[1], zlim[0]],
+            [xlim[0], ylim[0], zlim[1]],
+            [xlim[1], ylim[0], zlim[1]],
+            [xlim[1], ylim[1], zlim[1]],
+            [xlim[0], ylim[1], zlim[1]]
+        ])
+        
+        # Edges
+        edges = [
+            (0,1), (1,2), (2,3), (3,0), # Bottom
+            (4,5), (5,6), (6,7), (7,4), # Top
+            (0,4), (1,5), (2,6), (3,7)  # Vertical
+        ]
+        
+        for start, end in edges:
+            ax.plot3D(
+                [corners[start,0], corners[end,0]],
+                [corners[start,1], corners[end,1]],
+                [corners[start,2], corners[end,2]],
+                'k--', linewidth=0.5
+            )
+        
+        ax.set_axis_off()
 
-    #------------------------------------------------------------------
-    xi, xj, xk = 1, 2, 0
-    zmask = np.abs(truth[:,xk])<0.07
-    trajectories_zmask = np.abs(target[:,xk])<0.07
-    ax = fig.add_subplot(323)
-    ax.scatter(truth[zmask,xi],truth[zmask,xj],s=marker_size, c=colors[0], marker=marker, alpha=alpha)
-    ax.set_aspect('equal')  
-    ax = fig.add_subplot(324)
-    ax.scatter(target[trajectories_zmask,xi],target[trajectories_zmask,xj], s=marker_size, c=colors[1], marker=marker, alpha=alpha)
-    ax.set_aspect('equal')      
+    if save_fig is not None:
+        plt.savefig(save_fig, dpi=dpi)
+        
+    plt.show()
+    plt.close()
 
-    #------------------------------------------------------------------
-    xi, xj, xk = 0, 2, 1
-    zmask = np.abs(truth[:,xk])<0.07
-    trajectories_zmask = np.abs(target[:,xk])<0.07
-    ax = fig.add_subplot(325)
-    ax.scatter(truth[zmask,xi],truth[zmask,xj],s=marker_size, c=colors[0], marker=marker, alpha=alpha)
-    ax.set_aspect('equal')  
-    ax = fig.add_subplot(326)
-    ax.scatter(target[trajectories_zmask,xi],target[trajectories_zmask,xj], s=marker_size, c=colors[1], marker=marker, alpha=alpha)
-    ax.set_aspect('equal')  
+
+def plot_lss_slices(truth, target,  threshold, figsize=(12, 12), dpi=120, marker_size=0.01, colors=['k','r'], marker='o', alpha=1.0, save_fig=None, color_by_density=False, cmap='magma'):
+    truth = truth.cpu().numpy()
+    target = target.cpu().numpy()
+    
+    fig = plt.figure(figsize=figsize, dpi=dpi)
+
+    dims = [(0, 1, 2), (1, 2, 0), (0, 2, 1)]
+    
+    for i, (xi, xj, xk) in enumerate(dims):
+        # Truth
+        zmask = np.abs(truth[:,xk])<threshold
+        data = truth[zmask]
+        c = colors[0]
+
+        ax = fig.add_subplot(3, 2, 2*i + 1)
+        ax.scatter(data[:,xi], data[:,xj], s=marker_size, c=c, marker=marker, alpha=alpha)
+        ax.set_aspect('equal')
+        ax.grid(False)
+        
+        # Target
+        zmask = np.abs(target[:,xk])<threshold
+        data = target[zmask]
+        c = colors[1]
+        ax = fig.add_subplot(3, 2, 2*i + 2)
+        ax.scatter(data[:,xi], data[:,xj], s=marker_size, c=c, marker=marker, alpha=alpha)
+        ax.set_aspect('equal')
+        ax.grid(False)
+
+    if save_fig is not None:
+        plt.savefig(save_fig, dpi=dpi)
+
 
 
 def plot_power_spectrum_sphere(k, Pk_truth, Pk_target, figsize=(8,6)):

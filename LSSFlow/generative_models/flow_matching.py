@@ -58,10 +58,10 @@ class ConditionalFlowMatching(L.LightningModule):
                                      ))
         self.config = config
         
-        if config.flow == 'uniform':
+        if config.flow == 'UniformFlow':
             self.conditional_dynamics = UniformFlow(sigma=config.sigma, use_OT=config.use_OT)
 
-        elif config.flow == 'freefall':
+        elif config.flow == 'FreeFallFlow':
             self.conditional_dynamics = FreeFallFlow(sigma=config.sigma, use_OT=config.use_OT)
 
         if config.use_mass_reg:

@@ -48,6 +48,7 @@ class UniformFlow:
             return t.reshape(-1, *([1] * (state.ndim - 1)))
 
 
+
 class FreeFallFlow:
     """Conditional dynamics with quadratic time interpolation between 
        boundaries states at t=0 and t=1.
