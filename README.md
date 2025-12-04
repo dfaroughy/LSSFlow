@@ -1,4 +1,4 @@
 # LSSFlow
 Flow model for Large Scale Structure of the Universe
 
-![(left) truth patch of the cosmic web, (right) the generated patch with flow-matching.](https://github.com/dfaroughy/LSSFlow/blob/main/lss.png)
+![generated cosmic web](https://github.com/dfaroughy/LSSFlow/blob/main/lss.png "(left) truth patch of the cosmic web, (right) generated patch with flow-matching")
