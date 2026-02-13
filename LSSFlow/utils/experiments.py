@@ -53,6 +53,8 @@ class RunExperiment:
         elif config.gen_model == 'ActionMatching':
             self.gen_model = ActionMatching
 
+        self.num_nodes = int(os.environ.get("SLURM_NNODES", 1))
+
     def train(self):
         model = self.gen_model(config=self.config)
         dataloader, _ = self.build_dataloaders()
@@ -68,7 +70,7 @@ class RunExperiment:
         trainer = L.Trainer(max_epochs=self.config.max_epochs, 
                             accelerator='gpu', 
                             devices='auto',
-                            num_nodes=self.config.num_nodes,
+                            num_nodes=self.num_nodes,
                             strategy='ddp',
                             callbacks=[callback],
                             logger=logger,
@@ -97,7 +99,7 @@ class RunExperiment:
         trainer = L.Trainer(max_epochs=self.config.max_epochs, 
                             accelerator='gpu', 
                             devices='auto',
-                            num_nodes=self.config.num_nodes,
+                            num_nodes=self.num_nodes,
                             strategy='ddp',
                             callbacks=[callback],
                             logger=logger,
