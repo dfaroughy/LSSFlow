@@ -17,7 +17,6 @@ class Config:
     gamma = 1.0   # fourier feature hyperparameter
     n_embd = 128
     dim_fourier = 64
-    mass_reg = 1e-4
     use_OT = False
     num_blocks = 3
     dropout = 0.1
@@ -64,10 +63,7 @@ class ConditionalFlowMatching(L.LightningModule):
         elif config.flow == 'FreeFallFlow':
             self.conditional_dynamics = FreeFallFlow(sigma=config.sigma, use_OT=config.use_OT)
 
-        if config.use_mass_reg:
-            self.mass_reg = nn.Parameter(torch.tensor(config.mass_reg))
-
-        self.source = Uniform3D(support='cube')  # source distribution
+        self.source = Uniform3D(support=config.source_support)  # source distribution
 
     # ...Lightning methods 
 
@@ -161,9 +157,6 @@ class ConditionalFlowMatching(L.LightningModule):
             
         ut = self.conditional_dynamics.vector_field()
         loss =  F.mse_loss(vt, ut, reduction='mean')
-
-        if self.config.use_mass_reg:
-            loss += torch.abs(self.mass_reg) * torch.mean(phi**2)  # mass term regularization
 
         return loss
 
