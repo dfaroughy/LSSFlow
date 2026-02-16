@@ -82,7 +82,47 @@ class ResidualBlock(nn.Module):
         out = self.activation(out)
         return out
 
+class ACNBlock(nn.Module):
+    def __init__(self, dim, dropout=0.1, activation=F.gelu):
+        super().__init__()
 
+        self.lin1 = nn.Linear(dim, dim)
+        self.norm1 = nn.BatchNorm1d(dim)
+        self.lin2 = nn.Linear(dim, dim)
+        self.norm2 = nn.BatchNorm1d(dim)
+        self.dropout = nn.Dropout(dropout)
+        self.activation = activation
+
+    def forward(self, x):
+        # x: (B, N, C)
+        out = self.fc(x_flat)
+        out = self.bn(out)
+        out = self.act(out)
+        out = self.lin1(x)
+        out = self.norm1(out)
+        out = self.activation(out)
+        out = self.dropout(out)
+        out = self.lin2(out)
+        out = self.norm2(out)
+        out = self.activation(out)
+        return out 
+
+class AutoCompressingNet(nn.Module):
+    def __init__(self, in_dim, hidden_dim, num_layers, out_dim):
+        super().__init__()
+        self.input_proj = nn.Linear(in_dim, hidden_dim)
+        self.blocks = nn.ModuleList([ACNBlock(hidden_dim, hidden_dim) for _ in range(num_layers)])
+        self.output_head = nn.Linear(hidden_dim, out_dim)
+
+    def forward(self, x):
+        x = self.input_proj(x)
+        out = x
+        for block in self.blocks:
+            x = block(x)
+            out = out + x  # Long skip connection to output
+        return self.output_head(out)
+
+        
 class LearnableFourierEmbedding(nn.Module):
     """
     Learnable Fourier features for multi-D inputs, with OPTIONAL grouping.
