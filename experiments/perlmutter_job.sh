@@ -8,7 +8,7 @@ cat $0
 set -x
 
 module load conda
-conda activate markov_bridges
+conda activate LSS
 export WORLD_SIZE=$SLURM_NTASKS
 export MASTER_ADDR=$(hostname)
 export MASTER_PORT=$(expr 10000 + $(echo -n $SLURM_JOBID | tail -c 4))

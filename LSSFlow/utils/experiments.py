@@ -68,15 +68,15 @@ class RunExperiment:
                                                 save_last=True
                                                 )
         trainer = L.Trainer(max_epochs=self.config.max_epochs, 
-                            accelerator='gpu', 
-                            devices='auto',
-                            num_nodes=self.num_nodes,
-                            strategy='ddp',
-                            callbacks=[callback],
-                            logger=logger,
-                            sync_batchnorm=True,
-                            gradient_clip_val=1.0,
-                            )
+                    accelerator='gpu', 
+                    devices='auto',
+                    num_nodes=self.num_nodes,
+                    strategy='ddp_find_unused_parameters_true',
+                    callbacks=[callback],
+                    logger=logger,
+                    sync_batchnorm=True,
+                    gradient_clip_val=1.0,
+                    )
         trainer.fit(model, dataloader)
 
     def resume(self, experiment_id: str):
@@ -97,15 +97,15 @@ class RunExperiment:
                                             save_last=True
                                             )
         trainer = L.Trainer(max_epochs=self.config.max_epochs, 
-                            accelerator='gpu', 
-                            devices='auto',
-                            num_nodes=self.num_nodes,
-                            strategy='ddp',
-                            callbacks=[callback],
-                            logger=logger,
-                            sync_batchnorm=True,
-                            gradient_clip_val=1.0,
-                            )
+                    accelerator='gpu', 
+                    devices='auto',
+                    num_nodes=self.num_nodes,
+                    strategy='ddp_find_unused_parameters_true',
+                    callbacks=[callback],
+                    logger=logger,
+                    sync_batchnorm=True,
+                    gradient_clip_val=1.0,
+                    )
         trainer.fit(model, dataloader, ckpt_path=ckpt_path)
 
     def generate(self, experiment_id: str):
@@ -122,9 +122,9 @@ class RunExperiment:
                               inference_mode=False)
 
         sample_batched = generator.predict(model, dataloader)
-        trajectories = torch.cat(sample_batched, dim=0)  
-        gen_sample = trajectories.permute(1,0,2)[-1]  
-        torch.save(gen_sample, path / 'gen_sample.pt')
+        trajectories = torch.cat(sample_batched, dim=0).permute(1,0,2)
+        torch.save(trajectories, path / 'trajectories.pt')
+        torch.save(trajectories[-1] , path / 'gen_sample.pt')
 
     def build_dataloaders(self):
         dataset = DataCoupling(target=self.target, source=self.source)

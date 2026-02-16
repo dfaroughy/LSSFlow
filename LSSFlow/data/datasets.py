@@ -151,10 +151,12 @@ class Uniform3D:
     def sample(self, num_points=10_000, device='cpu'):
         if self.support == 'ball':
             return self.uniform_ball(num_points).to(device)
+        elif self.support == 'shell':
+            return self.uniform_shell(num_points).to(device)
         elif self.support == 'cube':
             return torch.distributions.uniform.Uniform(low=-1, high=1).sample((num_points,3)).to(device)
             
-    def uniform_ball(self, num_points=10_000, R=1):
+    def uniform_shell(self, num_points=10_000, R=1):
         m_costheta = torch.distributions.uniform.Uniform(low=-1, high=1)
         m_phi = torch.distributions.uniform.Uniform(low=0, high=2*np.pi)
         radius = torch.ones(num_points) * R
@@ -167,7 +169,20 @@ class Uniform3D:
         pos = torch.stack([x,y,z]).T
         return pos.to(torch.float32)
 
+    def uniform_ball(self, num_points: int, R: float = 1.0):
+        """
+        Uniform in volume inside the 3D ball of radius R centered at 0.
+        Returns: (N, 3) tensor.
+        """
+        # random directions via normal + normalization
+        x = torch.randn(num_points, 3)
+        x = x / x.norm(dim=-1, keepdim=True)
 
+        # radii with correct distribution: r = R * U^(1/3)
+        u = torch.rand(num_points, 1)
+        r = R * u.pow(1.0 / 3.0)
+
+        return x * r
 
 class UchuuCentered:
     def __init__(self, datafile='Uchuu1000-Pl18_z0p00_hlist_4.h5', radius=36):
@@ -200,6 +215,36 @@ class UchuuCentered:
         max_masked_distance = np.max(masked_distance)
         masked_normed_centered_pos = masked_centered_pos / max_masked_distance
         return torch.tensor(masked_normed_centered_pos).to(torch.float32)
+
+
+
+class AbbacusData:
+    def __init__(self, datafile='halo_positions.npy', radius=None):
+        self.pos = np.load(datafile)
+        self.radius = radius if radius is not None else np.max(np.sqrt(np.sum(self.pos**2, axis=1)))
+
+    def sample(self):
+
+        distance = np.sqrt(np.sum((self.pos)**2, axis=1))
+        phi = np.arctan2(self.pos[:,1],self.pos[:,0])
+        theta = np.arccos(self.pos[:,2] / distance)
+
+        mask = distance < self.radius
+        masked_distance = distance[mask]
+        masked_theta = theta[mask]
+        masked_phi = phi[mask]
+
+        masked_x = masked_distance * np.sin(masked_theta) * np.cos(masked_phi)
+        masked_y = masked_distance * np.sin(masked_theta) * np.sin(masked_phi)
+        masked_z = masked_distance * np.cos(masked_theta)
+
+        masked_centered_pos = np.stack([masked_x.T,masked_y.T,masked_z.T]).T
+
+        masked_distance = np.sqrt(np.sum((masked_centered_pos)**2, axis=1))
+        max_masked_distance = np.max(masked_distance)
+        masked_normed_centered_pos = masked_centered_pos / max_masked_distance
+        return torch.tensor(masked_normed_centered_pos).to(torch.float32)
+
 
 
 def inverse_sample_decorator(dist):
