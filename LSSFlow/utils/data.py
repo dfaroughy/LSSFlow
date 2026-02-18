@@ -1,6 +1,8 @@
-
 import numpy as np
+import matplotlib.pyplot as plt
+import treecorr
 import torch
+
 
 def build_voxel_grid(points, box_size=1000.0, voxel_size=100.0):
     """
@@ -57,6 +59,62 @@ def get_voxel_points(points_sorted, offsets, voxel_id):
     start = offsets[voxel_id]
     end = offsets[voxel_id + 1]
     return points_sorted[start:end] 
+
+
+def Landy_Szalay(catalog, N_sub=50_000, n_bins_xi=20):
+    """
+    Landy-Szalay ξ(r) using TreeCorr (ball-tree with bin_slop approx).
+    
+    TreeCorr is the standard in observational cosmology (DES, HSC, KiDS).
+    Its bin_slop approximation skips pairs clearly inside a bin,
+    giving 3-10× speedup over exact KDTree counting.
+    
+    Parameters
+    ----------
+    catalog : tensor (N, 3)
+    N_sub   : int – subsample size
+    n_bins_xi : int – number of radial bins
+    """
+    N = catalog.shape[0]
+    n_sub = min(N_sub, N)
+    rng = np.random.default_rng(0)
+
+    idx = rng.choice(N, n_sub, replace=False)
+    data_pts = catalog[idx].numpy().astype(np.float64)
+
+    R = float(np.linalg.norm(data_pts, axis=1).max())
+
+    # Random catalog (uniform ball, radius R), 3× the data
+    n_rand = 3 * n_sub
+    u = rng.normal(size=(n_rand, 3))
+    u /= np.linalg.norm(u, axis=1, keepdims=True)
+    r_rand = R * rng.random(n_rand) ** (1.0 / 3.0)
+    rand_pts = (u * r_rand[:, None]).astype(np.float64)
+
+    # TreeCorr catalogs (3D Cartesian, no RA/Dec)
+    cat_D = treecorr.Catalog(x=data_pts[:, 0], y=data_pts[:, 1], z=data_pts[:, 2])
+    cat_R = treecorr.Catalog(x=rand_pts[:, 0], y=rand_pts[:, 1], z=rand_pts[:, 2])
+
+    # Configure NNCorrelation for linear bins in 3D separation
+    r_min = 1e-6 * R   # small but nonzero to avoid log(0)
+    r_max = 2.0 * R
+    nn_dd = treecorr.NNCorrelation(min_sep=r_min, max_sep=r_max, nbins=n_bins_xi,
+                                    metric='Euclidean', bin_slop=0.1)
+    nn_dr = treecorr.NNCorrelation(min_sep=r_min, max_sep=r_max, nbins=n_bins_xi,
+                                    metric='Euclidean', bin_slop=0.1)
+    nn_rr = treecorr.NNCorrelation(min_sep=r_min, max_sep=r_max, nbins=n_bins_xi,
+                                    metric='Euclidean', bin_slop=0.1)
+
+    # Count pairs
+    nn_dd.process(cat_D)
+    nn_dr.process(cat_D, cat_R)
+    nn_rr.process(cat_R)
+
+    # Landy-Szalay via TreeCorr's built-in estimator
+    xi, varxi = nn_dd.calculateXi(rr=nn_rr, dr=nn_dr)
+
+    r_centers = np.exp(nn_dd.meanlogr)  # geometric mean of each bin
+    return r_centers, xi
 
 
 def compute_power_spectrum_cube(points, box_size, grid_size):
